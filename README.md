@@ -6,7 +6,7 @@
     (tokio-)rusqlite session store for <code>tower-sessions</code>.
 </p>
 
-[![tests](https://github.com/patte/tower-sessions-rusqlite-store/actions/workflows/rust.yml/badge.svg)](https://github.com/patte/tower-sessions-rusqlite-store/actions/workflows/rust.yml)
+[![tests](https://github.com/patte/tower-sessions-rusqlite-store/actions/workflows/rust.yml/badge.svg)](https://github.com/patte/tower-sessions-rusqlite-store/actions/workflows/rust.yml) [![crates.io](https://img.shields.io/crates/v/tower-sessions-rusqlite-store)](https://crates.io/crates/tower-sessions-rusqlite-store)
 
 
 ## Overview
