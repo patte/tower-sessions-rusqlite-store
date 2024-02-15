@@ -6,6 +6,9 @@
     (tokio-)rusqlite session store for <code>tower-sessions</code>.
 </p>
 
+[![tests](https://github.com/patte/tower-sessions-rusqlite-store/actions/workflows/rust.yml/badge.svg)](https://github.com/patte/tower-sessions-rusqlite-store/actions/workflows/rust.yml)
+
+
 ## Overview
 This is a `SessionStore` for the [`tower-sessions`](https://github.com/maxcountryman/tower-sessions) middleware which uses [tokio-rusqlite](https://github.com/programatik29/tokio-rusqlite) for handling SQLite databases.
 
