@@ -28,3 +28,6 @@ This is an unofficial fork of the original `tower-sessions-stores`. I'm relative
 ## 🙏 Credits
 All credits go to the original authors of `tower-sessions-stores` and `tower-sessions`.
 
+<!-- 📦 Release
+cargo publish --dry-run -p tower-sessions-rusqlite-store
+-->
