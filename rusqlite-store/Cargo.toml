@@ -15,7 +15,7 @@ readme = "../README.md"
 [dependencies]
 async-trait = "0.1.77"
 rmp-serde = "1.1.2"
-rusqlite = { version = "0.30.0" }
+rusqlite = { version = "0.31.0" }
 tokio-rusqlite = "0.5.0"
 thiserror = "1.0.56"
 time = "0.3.31"
