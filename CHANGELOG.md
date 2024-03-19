@@ -1,3 +1,7 @@
+# 0.11.1-2
+
+- Update `rusqlite` to `0.31.0`
+
 # 0.11.1
 
 - Update `tower-sessions` to `0.11.1`
