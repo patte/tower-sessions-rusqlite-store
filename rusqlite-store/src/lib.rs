@@ -207,7 +207,7 @@ impl SessionStore for RusqliteStore {
                         ),
                     }
                 }
-                _ => RusqliteStoreError::TokioRusqlite(e.into()),
+                _ => RusqliteStoreError::TokioRusqlite(e),
             })?;
 
         record.id = new_id;
@@ -223,7 +223,7 @@ impl SessionStore for RusqliteStore {
 
         conn.call({
             move |conn| {
-                save_with_conn(&conn, &table_name, &record, &record_data).map_err(|e| e.into())
+                save_with_conn(conn, &table_name, &record, &record_data).map_err(|e| e.into())
             }
         })
         .await
