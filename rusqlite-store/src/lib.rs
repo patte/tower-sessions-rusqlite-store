@@ -12,7 +12,7 @@ use tower_sessions_core::{
 /// An error type for Rusqlite stores.
 #[derive(thiserror::Error, Debug)]
 pub enum RusqliteStoreError {
-    /// A variant to map `rusqlite` errors.
+    /// A variant to map `tokio_rusqlite` errors.
     #[error(transparent)]
     TokioRusqlite(#[from] tokio_rusqlite::Error),
 
@@ -101,6 +101,47 @@ impl RusqliteStore {
     }
 }
 
+fn id_exists_with_conn(
+    conn: &rusqlite::Connection,
+    table_name: &str,
+    id: &Id,
+) -> rusqlite::Result<bool> {
+    let query = format!(
+        r#"
+        select exists(select 1 from {} where id = ?1)
+        "#,
+        table_name
+    );
+    let mut stmt = conn.prepare(&query)?;
+    stmt.query_row(params![id.to_string()], |row| row.get(0))
+}
+
+fn save_with_conn(
+    conn: &rusqlite::Connection,
+    table_name: &str,
+    record: &Record,
+    record_data: &[u8],
+) -> rusqlite::Result<usize> {
+    let query = format!(
+        r#"
+        insert into {}
+            (id, data, expiry_date) values (?1, ?2, ?3)
+        on conflict(id) do update set
+            data = excluded.data,
+            expiry_date = excluded.expiry_date
+        "#,
+        table_name
+    );
+    conn.execute(
+        &query,
+        params![
+            record.id.to_string(),
+            record_data,
+            record.expiry_date.unix_timestamp()
+        ],
+    )
+}
+
 #[async_trait]
 impl ExpiredDeletion for RusqliteStore {
     async fn delete_expired(&self) -> session_store::Result<()> {
@@ -130,31 +171,59 @@ impl ExpiredDeletion for RusqliteStore {
 
 #[async_trait]
 impl SessionStore for RusqliteStore {
-    async fn save(&self, record: &Record) -> session_store::Result<()> {
+    async fn create(&self, record: &mut Record) -> session_store::Result<()> {
         let conn = self.conn.clone();
 
-        conn.call({
-            let table_name = self.table_name.clone();
-            let record_id = record.id.to_string();
-            let record_data = rmp_serde::to_vec(record).map_err(RusqliteStoreError::Encode)?;
-            let record_expiry = record.expiry_date;
+        let new_id = conn
+            .call({
+                let mut record = record.clone();
+                let table_name = self.table_name.clone();
 
+                move |conn| {
+                    let tx = conn.transaction()?;
+
+                    while id_exists_with_conn(&tx, &table_name, &record.id)? {
+                        record.id = Id::default();
+                    }
+
+                    let record_data = rmp_serde::to_vec(&record)
+                        .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+
+                    save_with_conn(&tx, &table_name, &record, &record_data)?;
+
+                    tx.commit()?;
+
+                    Ok(record.id)
+                }
+            })
+            .await
+            // extract encode error in box
+            .map_err(|e| match e {
+                tokio_rusqlite::Error::Other(boxed_err) => {
+                    match boxed_err.downcast::<rmp_serde::encode::Error>() {
+                        Ok(encode_error) => RusqliteStoreError::Encode(*encode_error),
+                        Err(original_err) => RusqliteStoreError::TokioRusqlite(
+                            tokio_rusqlite::Error::Other(original_err),
+                        ),
+                    }
+                }
+                _ => RusqliteStoreError::TokioRusqlite(e),
+            })?;
+
+        record.id = new_id;
+
+        Ok(())
+    }
+
+    async fn save(&self, record: &Record) -> session_store::Result<()> {
+        let conn = self.conn.clone();
+        let table_name = self.table_name.clone();
+        let record = record.clone();
+        let record_data = rmp_serde::to_vec(&record).map_err(RusqliteStoreError::Encode)?;
+
+        conn.call({
             move |conn| {
-                let query = format!(
-                    r#"
-                    insert into {}
-                    (id, data, expiry_date) values (?1, ?2, ?3)
-                    on conflict(id) do update set
-                    data = excluded.data,
-                    expiry_date = excluded.expiry_date
-                    "#,
-                    table_name
-                );
-                conn.execute(
-                    &query,
-                    params![record_id, record_data, record_expiry.unix_timestamp()],
-                )
-                .map_err(|e| e.into())
+                save_with_conn(conn, &table_name, &record, &record_data).map_err(|e| e.into())
             }
         })
         .await
@@ -232,4 +301,100 @@ fn is_valid_table_name(name: &str) -> bool {
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+// unit tests from https://github.com/maxcountryman/tower-sessions/blob/6ad8933b4f5e71f3202f0c1a28f194f3db5234c8/memory-store/src/lib.rs#L62
+#[cfg(test)]
+mod rusqlite_store_tests {
+    use time::Duration;
+
+    use super::*;
+
+    async fn create_store() -> RusqliteStore {
+        let conn = Connection::open_in_memory().await.unwrap();
+        let store = RusqliteStore::new(conn);
+        store.migrate().await.unwrap();
+        store
+    }
+
+    #[tokio::test]
+    async fn test_create() {
+        let store = create_store().await;
+        let mut record = Record {
+            id: Default::default(),
+            data: Default::default(),
+            expiry_date: OffsetDateTime::now_utc() + Duration::minutes(30),
+        };
+        assert!(store.create(&mut record).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_save() {
+        let store = create_store().await;
+        let record = Record {
+            id: Default::default(),
+            data: Default::default(),
+            expiry_date: OffsetDateTime::now_utc() + Duration::minutes(30),
+        };
+        assert!(store.save(&record).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_load() {
+        let store = create_store().await;
+        let mut record = Record {
+            id: Default::default(),
+            data: Default::default(),
+            expiry_date: OffsetDateTime::now_utc() + Duration::minutes(30),
+        };
+        store.create(&mut record).await.unwrap();
+        let loaded_record = store.load(&record.id).await.unwrap();
+        assert_eq!(Some(record), loaded_record);
+    }
+
+    #[tokio::test]
+    async fn test_delete() {
+        let store = create_store().await;
+        let mut record = Record {
+            id: Default::default(),
+            data: Default::default(),
+            expiry_date: OffsetDateTime::now_utc() + Duration::minutes(30),
+        };
+        store.create(&mut record).await.unwrap();
+        assert!(store.delete(&record.id).await.is_ok());
+        assert_eq!(None, store.load(&record.id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_create_id_collision() {
+        let store = create_store().await;
+        let expiry_date = OffsetDateTime::now_utc() + Duration::minutes(30);
+        let mut record1 = Record {
+            id: Default::default(),
+            data: Default::default(),
+            expiry_date,
+        };
+        let mut record2 = Record {
+            id: Default::default(),
+            data: Default::default(),
+            expiry_date,
+        };
+        store.create(&mut record1).await.unwrap();
+        record2.id = record1.id; // Set the same ID for record2
+        store.create(&mut record2).await.unwrap();
+        assert_ne!(record1.id, record2.id); // IDs should be different
+    }
+
+    #[tokio::test]
+    async fn test_delete_expired() {
+        let store = create_store().await;
+        let mut record = Record {
+            id: Default::default(),
+            data: Default::default(),
+            expiry_date: OffsetDateTime::now_utc() - Duration::minutes(30),
+        };
+        store.create(&mut record).await.unwrap();
+        store.delete_expired().await.unwrap();
+        assert_eq!(None, store.load(&record.id).await.unwrap());
+    }
 }

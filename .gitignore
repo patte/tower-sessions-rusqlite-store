@@ -15,3 +15,6 @@ Cargo.lock
 
 # example sqlite dbs
 rusqlite-example.db
+
+# Coverage report
+lcov.info
