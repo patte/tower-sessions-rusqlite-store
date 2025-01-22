@@ -1,3 +1,20 @@
+# 0.14.0
+
+- use bundled sqlite for examples and tests by @arthmis in https://github.com/patte/tower-sessions-rusqlite-store/pull/24
+- update tower-sessions (0.14.0) and axum (0.8) dependencies by @arthmis in https://github.com/patte/tower-sessions-rusqlite-store/pull/23
+- deps: update dependencies (thiserror v2.0.11, tower-cookies v0.11.0) by @patte in https://github.com/patte/tower-sessions-rusqlite-store/pull/25
+
+All dependency changes:
+`thiserror = "1.0.64" => "2.0.11"`
+`axum = "0.7.7" => "0.8"`
+`tower-sessions = "0.13.0" => "0.14.0"`
+`tower-cookies = "0.10.0" => "0.11.0"`
+`tokio-rusqlite = "0.6.0"`
+
+# 0.13.0
+
+- deps: bump dependencies (tower-sessions v0.13, tokio-rusqlite v0.6, rusqlite 0.32) by @patte in https://github.com/patte/tower-sessions-rusqlite-store/pull/13
+
 # 0.12.0
 
 - Update `tower-sessions` to `0.12.0` and implement `SessionStore::create`.

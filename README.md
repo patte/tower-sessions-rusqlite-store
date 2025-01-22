@@ -28,7 +28,7 @@ The unit tests are copied from [maxcountryman/tower-sessions/memory-store](https
 Run all tests with: `cargo nextest run rusqlite_store_tests`.
 
 ## 🦺 Disclaimer
-This is an unofficial fork of the original `tower-sessions-stores`. I'm relatively new to Rust and might have made stupid mistakes.
+This is an unofficial fork of the original `tower-sessions-stores`.
 
 ## 🙏 Credits
 Most credits go to the original authors of `tower-sessions-stores` and `tower-sessions`.
