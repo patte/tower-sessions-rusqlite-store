@@ -5,8 +5,7 @@ pub use tokio_rusqlite;
 use tokio_rusqlite::{params, Connection, Result as SqlResult};
 use tower_sessions_core::{
     session::{Id, Record},
-    session_store::{self, ExpiredDeletion},
-    SessionStore,
+    session_store, ExpiredDeletion, SessionStore,
 };
 
 /// An error type for Rusqlite stores.
