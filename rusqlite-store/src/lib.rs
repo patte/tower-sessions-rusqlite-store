@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use rusqlite::OptionalExtension;
+use std::error::Error;
 use time::OffsetDateTime;
 pub use tokio_rusqlite;
 use tokio_rusqlite::{params, Connection, Result as SqlResult};
@@ -22,6 +23,10 @@ pub enum RusqliteStoreError {
     /// A variant to map `rmp_serde` decode errors.
     #[error(transparent)]
     Decode(#[from] rmp_serde::decode::Error),
+
+    /// A variant for other backend errors.
+    #[error("Backend error: {0}")]
+    Other(String),
 }
 
 impl From<RusqliteStoreError> for session_store::Error {
@@ -32,6 +37,7 @@ impl From<RusqliteStoreError> for session_store::Error {
             }
             RusqliteStoreError::Decode(inner) => session_store::Error::Decode(inner.to_string()),
             RusqliteStoreError::Encode(inner) => session_store::Error::Encode(inner.to_string()),
+            RusqliteStoreError::Other(inner) => session_store::Error::Backend(inner),
         }
     }
 }
@@ -185,8 +191,7 @@ impl SessionStore for RusqliteStore {
                         record.id = Id::default();
                     }
 
-                    let record_data = rmp_serde::to_vec(&record)
-                        .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+                    let record_data = rmp_serde::to_vec(&record).map_err(Box::new)?;
 
                     save_with_conn(&tx, &table_name, &record, &record_data)?;
 
@@ -196,18 +201,19 @@ impl SessionStore for RusqliteStore {
                 }
             })
             .await
-            // extract encode error in box
-            .map_err(|e| match e {
-                tokio_rusqlite::Error::Other(boxed_err) => {
-                    match boxed_err.downcast::<rmp_serde::encode::Error>() {
-                        Ok(encode_error) => RusqliteStoreError::Encode(*encode_error),
-                        Err(original_err) => RusqliteStoreError::TokioRusqlite(
-                            tokio_rusqlite::Error::Other(original_err),
-                        ),
+            .map_err(
+                |e: tokio_rusqlite::Error<Box<dyn Error + Send + Sync>>| match e {
+                    tokio_rusqlite::Error::Error(boxed_err) => {
+                        match boxed_err.downcast::<rmp_serde::encode::Error>() {
+                            Ok(encode_error) => RusqliteStoreError::Encode(*encode_error),
+                            Err(original_box) => {
+                                RusqliteStoreError::Other(original_box.to_string())
+                            }
+                        }
                     }
-                }
-                _ => RusqliteStoreError::TokioRusqlite(e),
-            })?;
+                    other => RusqliteStoreError::Other(other.to_string()),
+                },
+            )?;
 
         record.id = new_id;
 
