@@ -20,7 +20,7 @@ All contributions are welcome!
 Check out the [counter example](./rusqlite-store/examples/counter.rs). Run it with `cargo run --example counter`.
 
 ### sqlite
-`tokio-rusqlite` switched to [not having `bundled` enabled anymore by default](github.com/programatik29/tokio-rusqlite/releases/tag/v0.7.0) with version `0.7` and this library followed that change. If you want to enable `bundled` do this in your `Cargo.toml`:
+`tokio-rusqlite` switched to [not having `bundled` enabled anymore by default](https://github.com/programatik29/tokio-rusqlite/releases/tag/v0.7.0) with version `0.7` and this library followed that change. If you want to enable `bundled` do this in your `Cargo.toml`:
 
 ```toml
 tower-sessions-rusqlite-store = "0.14.1"
