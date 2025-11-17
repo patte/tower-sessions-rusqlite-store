@@ -1,3 +1,9 @@
+# 0.14.1
+
+- bump rusqlite (0.32.1 -> 0.37.0), tokio-rusqlite (0.6.0 -> 0.7.0) and other dependencies by @Chleba in https://github.com/patte/tower-sessions-rusqlite-store/pull/29
+- add test for session expiration by @patte in https://github.com/patte/tower-sessions-rusqlite-store/pull/26
+- bump actions/checkout from 4 to 5 by @dependabot in https://github.com/patte/tower-sessions-rusqlite-store/pull/28
+
 # 0.14.0
 
 - use bundled sqlite for examples and tests by @arthmis in https://github.com/patte/tower-sessions-rusqlite-store/pull/24
