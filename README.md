@@ -19,6 +19,14 @@ All contributions are welcome!
 ## 🤸 Usage
 Check out the [counter example](./rusqlite-store/examples/counter.rs). Run it with `cargo run --example counter`.
 
+### sqlite
+`tokio-rusqlite` switched to [not having `bundled` enabled anymore by default](github.com/programatik29/tokio-rusqlite/releases/tag/v0.7.0) with version `0.7` and this library followed that change. If you want to enable `bundled` do this in your `Cargo.toml`:
+
+```toml
+tower-sessions-rusqlite-store = "0.14.1"
+tokio-rusqlite = { version = "0.7.0", features = ["bundled"] }
+```
+
 ## 🧪 Tests
 This crate is covered by integration- and unit-tests.
 The integration tests are copied from [tower-session-stores](https://github.com/maxcountryman/tower-sessions-stores) and kept in the `tests` create. They can be run with `cargo nextest run rusqlite_store_tests --test test_integration`.

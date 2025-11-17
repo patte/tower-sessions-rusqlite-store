@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use rusqlite::OptionalExtension;
+use std::error::Error;
 use time::OffsetDateTime;
 pub use tokio_rusqlite;
 use tokio_rusqlite::{params, Connection, Result as SqlResult};
@@ -22,6 +23,10 @@ pub enum RusqliteStoreError {
     /// A variant to map `rmp_serde` decode errors.
     #[error(transparent)]
     Decode(#[from] rmp_serde::decode::Error),
+
+    /// A variant for other backend errors.
+    #[error("Backend error: {0}")]
+    Other(String),
 }
 
 impl From<RusqliteStoreError> for session_store::Error {
@@ -32,6 +37,7 @@ impl From<RusqliteStoreError> for session_store::Error {
             }
             RusqliteStoreError::Decode(inner) => session_store::Error::Decode(inner.to_string()),
             RusqliteStoreError::Encode(inner) => session_store::Error::Encode(inner.to_string()),
+            RusqliteStoreError::Other(inner) => session_store::Error::Backend(inner),
         }
     }
 }
@@ -91,10 +97,7 @@ impl RusqliteStore {
             "#,
             self.table_name
         );
-        conn.call(
-            move |conn| conn.execute(&query, []).map_err(|e| e.into()), // Convert to tokio_rusqlite::Error
-        )
-        .await?;
+        conn.call(move |conn| conn.execute(&query, [])).await?;
 
         Ok(())
     }
@@ -152,17 +155,14 @@ impl ExpiredDeletion for RusqliteStore {
             "#,
             table_name = self.table_name
         );
-        conn.call(move |conn| {
-            conn.execute(&query, [OffsetDateTime::now_utc().unix_timestamp()])
-                .map_err(|e| e.into())
-        })
-        .await
-        .map_err(|e| {
-            // printing the error here because this usually runs in the background
-            // and thus the error is only received shortly before the process exits
-            eprintln!("Error deleting expired sessions: {:?}", e);
-            RusqliteStoreError::TokioRusqlite(e)
-        })?;
+        conn.call(move |conn| conn.execute(&query, [OffsetDateTime::now_utc().unix_timestamp()]))
+            .await
+            .map_err(|e| {
+                // printing the error here because this usually runs in the background
+                // and thus the error is only received shortly before the process exits
+                eprintln!("Error deleting expired sessions: {:?}", e);
+                RusqliteStoreError::TokioRusqlite(e)
+            })?;
 
         Ok(())
     }
@@ -185,8 +185,7 @@ impl SessionStore for RusqliteStore {
                         record.id = Id::default();
                     }
 
-                    let record_data = rmp_serde::to_vec(&record)
-                        .map_err(|e| tokio_rusqlite::Error::Other(Box::new(e)))?;
+                    let record_data = rmp_serde::to_vec(&record).map_err(Box::new)?;
 
                     save_with_conn(&tx, &table_name, &record, &record_data)?;
 
@@ -196,18 +195,19 @@ impl SessionStore for RusqliteStore {
                 }
             })
             .await
-            // extract encode error in box
-            .map_err(|e| match e {
-                tokio_rusqlite::Error::Other(boxed_err) => {
-                    match boxed_err.downcast::<rmp_serde::encode::Error>() {
-                        Ok(encode_error) => RusqliteStoreError::Encode(*encode_error),
-                        Err(original_err) => RusqliteStoreError::TokioRusqlite(
-                            tokio_rusqlite::Error::Other(original_err),
-                        ),
+            .map_err(
+                |e: tokio_rusqlite::Error<Box<dyn Error + Send + Sync>>| match e {
+                    tokio_rusqlite::Error::Error(boxed_err) => {
+                        match boxed_err.downcast::<rmp_serde::encode::Error>() {
+                            Ok(encode_error) => RusqliteStoreError::Encode(*encode_error),
+                            Err(original_box) => {
+                                RusqliteStoreError::Other(original_box.to_string())
+                            }
+                        }
                     }
-                }
-                _ => RusqliteStoreError::TokioRusqlite(e),
-            })?;
+                    other => RusqliteStoreError::Other(other.to_string()),
+                },
+            )?;
 
         record.id = new_id;
 
@@ -220,13 +220,9 @@ impl SessionStore for RusqliteStore {
         let record = record.clone();
         let record_data = rmp_serde::to_vec(&record).map_err(RusqliteStoreError::Encode)?;
 
-        conn.call({
-            move |conn| {
-                save_with_conn(conn, &table_name, &record, &record_data).map_err(|e| e.into())
-            }
-        })
-        .await
-        .map_err(RusqliteStoreError::TokioRusqlite)?;
+        conn.call(move |conn| save_with_conn(conn, &table_name, &record, &record_data))
+            .await
+            .map_err(RusqliteStoreError::TokioRusqlite)?;
 
         Ok(())
     }
@@ -255,7 +251,6 @@ impl SessionStore for RusqliteStore {
                         },
                     )
                     .optional()
-                    .map_err(|e| e.into())
                 }
             })
             .await
@@ -285,7 +280,6 @@ impl SessionStore for RusqliteStore {
                     table_name
                 );
                 conn.execute(&query, params![session_id])
-                    .map_err(|e| e.into())
             }
         })
         .await
