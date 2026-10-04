@@ -1,3 +1,13 @@
+# 0.15.0
+
+- bump tower-sessions (0.14.0 -> 0.15.0), rusqlite (0.37.0 -> 0.40.2), tokio-rusqlite (0.7.0 -> 0.8.0) by @dependabot in https://github.com/patte/tower-sessions-rusqlite-store/pull/35
+- bump actions/checkout (5 -> 7) and codecov/codecov-action (4 -> 7) by @dependabot in https://github.com/patte/tower-sessions-rusqlite-store/pull/30, https://github.com/patte/tower-sessions-rusqlite-store/pull/31 and https://github.com/patte/tower-sessions-rusqlite-store/pull/34
+
+All dependency changes:
+`tower-sessions = "0.14.0" => "0.15.0"`
+`rusqlite = "0.37.0" => "0.40.2"`
+`tokio-rusqlite = "0.7.0" => "0.8.0"`
+
 # 0.14.1
 
 - bump rusqlite (0.32.1 -> 0.37.0), tokio-rusqlite (0.6.0 -> 0.7.0) and other dependencies by @Chleba in https://github.com/patte/tower-sessions-rusqlite-store/pull/29
